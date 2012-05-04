@@ -332,9 +332,7 @@ class Export(object):
             if object.is_visible(self.config.scene):
                 return True
         else:
-            return True
-
-        return False
+            return not object.hide_render
         
     def setArmatureInRestMode(self):
         for arm in bpy.data.objects:
@@ -523,7 +521,7 @@ class Export(object):
                     if v == item:
                         meshobj = k
                 
-                item.matrix = getDeltaMatrixFromMatrix(item.children[0].armature_modifier.object.matrix_world, meshobj.matrix_world)
+                item.matrix = getDeltaMatrixFromMatrix(geode.armature_modifier.object.matrix_world, meshobj.matrix_world)
                 
                 arm.children.append(item)
                 osglog.log("NOTICE: Reparenting {} to {}".format(geode.name, arm.name))
