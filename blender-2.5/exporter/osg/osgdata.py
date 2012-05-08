@@ -592,7 +592,9 @@ class Export(object):
             self.root.update_callbacks.append(animation_manager)
             
         self.reparentRiggedGeodes(self.root, None)
-        self.reparentNonDeformedGeodes(self.root, None)
+        
+        if self.config.optimize_influence:
+            self.reparentNonDeformedGeodes(self.root, None)
 
         # index light num for opengl use and enable them in a stateset
         if len(self.lights) > 0:
@@ -685,21 +687,22 @@ class Export(object):
                     osglog.log("error while trying to copy file {} to {}: {}".format(imagename, nativePath, str(e)))
 
         filetoview = self.config.getFullName("osg")
-        if self.config.osgconv_to_ive:
+        if self.config.run_osgconv:
             if self.config.osgconv_embed_textures:
-                r = [self.config.osgconv_path, "-O", "includeImageFileInIVEFile", self.config.getFullName("osg"), self.config.getFullName("ive")]
+                r = [self.config.osgconv_path, "-O", "includeImageFileInIVEFile", self.config.getFullName("osg"), self.config.getFullName(self.config.osgconv_ext)]
             else:
-                r = [self.config.osgconv_path, "-O", "noTexturesInIVEFile", self.config.getFullName("osg"), self.config.getFullName("ive")]
+                r = [self.config.osgconv_path, "-O", "noTexturesInIVEFile", self.config.getFullName("osg"), self.config.getFullName(self.config.osgconv_ext)]
             try:
+                osglog.log("Executing osgconv: " + str(r))
                 if subprocess.call(r) == 0:
-                    filetoview = self.config.getFullName("ive")
+                    filetoview = self.config.getFullName(self.config.osgconv_ext)
                     if self.config.osgconv_cleanup:
                         os.unlink(self.config.getFullName("osg"))
                         if self.config.osgconv_embed_textures:
                             for i in copied_images:
                                 os.unlink(i)
             except Exception as e:
-                print("Error running " + str(r))
+                print("Error running osgconv")
                 print(repr(e))
             
         if self.config.run_viewer:
