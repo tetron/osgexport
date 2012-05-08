@@ -19,6 +19,7 @@
 # Authors:
 #  Cedric Pinson <cedric.pinson@plopbyte.com>
 #  Jeremy Moles <jeremy@emperorlinux.com>
+#  Peter Amstutz <tetron@interreality.org>
 
 import bpy
 import mathutils
@@ -207,61 +208,49 @@ def createAnimationUpdate(obj, callback, rotation_mode, prefix="", zero=False):
     
     if zero:
         if has_location_keys:
-            tr = StackedTranslateElement()
-            tr.translate = Vector()
-            callback.stacked_transforms.append(tr)
+            callback.stacked_transforms.append(StackedTranslateElement())
             
-            if has_rotation_keys:
-                if rotation_mode in ["XYZ", "XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]:
-                    rotation_keys = [StackedRotateAxisElement(name = "euler_x", axis = Vector((1,0,0)), angle = 0),
-                                     StackedRotateAxisElement(name = "euler_y", axis = Vector((0,1,0)), angle = 0),
-                                     StackedRotateAxisElement(name = "euler_z", axis = Vector((0,0,1)), angle = 0)]
-                
-                    callback.stacked_transforms.append(rotation_keys[ord(obj.rotation_mode[2]) - ord('X')])
-                    callback.stacked_transforms.append(rotation_keys[ord(obj.rotation_mode[1]) - ord('X')])
-                    callback.stacked_transforms.append(rotation_keys[ord(obj.rotation_mode[0]) - ord('X')])
-                
-                if rotation_mode == "QUATERNION":
-                    q = StackedQuaternionElement()
-                    q.quaternion = Quaternion()
-                    callback.stacked_transforms.append(q)
-                
-                if rotation_mode == "AXIS_ANGLE":
-                    callback.stacked_transforms.append(StackedRotateAxisElement(name = "axis_angle", 
-                                                        axis = Vector((1, 0, 0)), 
-                                                        angle = 0))
+        if has_rotation_keys:
+            if rotation_mode in ["XYZ", "XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]:
+                rotation_keys = [StackedRotateAxisElement(name = "euler_x", axis = Vector((1,0,0)), angle = 0),
+                                 StackedRotateAxisElement(name = "euler_y", axis = Vector((0,1,0)), angle = 0),
+                                 StackedRotateAxisElement(name = "euler_z", axis = Vector((0,0,1)), angle = 0)]
+            
+                callback.stacked_transforms.append(rotation_keys[ord(rotation_mode[2]) - ord('X')])
+                callback.stacked_transforms.append(rotation_keys[ord(rotation_mode[1]) - ord('X')])
+                callback.stacked_transforms.append(rotation_keys[ord(rotation_mode[0]) - ord('X')])
+            
+            if rotation_mode == "QUATERNION":
+                callback.stacked_transforms.append(StackedQuaternionElement())
+            
+            if rotation_mode == "AXIS_ANGLE":
+                callback.stacked_transforms.append(StackedRotateAxisElement(name = "axis_angle"))
+        
         if has_scale_keys:
-            sc = StackedScaleElement()
-            sc.scale = Vector(obj.scale)
+            sc = StackedScaleElement(scale = Vector(obj.scale))
             callback.stacked_transforms.append(sc)
             
     else:
-        tr = StackedTranslateElement()
-        tr.translate = Vector(obj.location)
-        callback.stacked_transforms.append(tr)
+        callback.stacked_transforms.append(StackedTranslateElement(translate = Vector(obj.location)))
         
         if rotation_mode in ["XYZ", "XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]:
-            rotation_keys = [StackedRotateAxisElement(name = "euler_x", axis = Vector((1,0,0)), angle = obj.rotation_euler[0]),
-                             StackedRotateAxisElement(name = "euler_y", axis = Vector((0,1,0)), angle = obj.rotation_euler[1]),
-                             StackedRotateAxisElement(name = "euler_z", axis = Vector((0,0,1)), angle = obj.rotation_euler[2])]
+            rotation_keys = [StackedRotateAxisElement(name = "euler_x", axis = Vector((1,0,0)), angle = obj.rotation_euler.x),
+                             StackedRotateAxisElement(name = "euler_y", axis = Vector((0,1,0)), angle = obj.rotation_euler.y),
+                             StackedRotateAxisElement(name = "euler_z", axis = Vector((0,0,1)), angle = obj.rotation_euler.z)]
         
-            callback.stacked_transforms.append(rotation_keys[ord(obj.rotation_mode[2]) - ord('X')])
-            callback.stacked_transforms.append(rotation_keys[ord(obj.rotation_mode[1]) - ord('X')])
-            callback.stacked_transforms.append(rotation_keys[ord(obj.rotation_mode[0]) - ord('X')])
+            callback.stacked_transforms.append(rotation_keys[ord(rotation_mode[2]) - ord('X')])
+            callback.stacked_transforms.append(rotation_keys[ord(rotation_mode[1]) - ord('X')])
+            callback.stacked_transforms.append(rotation_keys[ord(rotation_mode[0]) - ord('X')])
             
-        if rotation_mode == "QUATERNION":
-            q = StackedQuaternionElement()
-            q.quaternion = obj.rotation_quaternion
-            callback.stacked_transforms.append(q)
+        if rotation_mode == "QUATERNION": 
+            callback.stacked_transforms.append(StackedQuaternionElement(quaternion = obj.rotation_quaternion))
         
         if rotation_mode == "AXIS_ANGLE":
             callback.stacked_transforms.append(StackedRotateAxisElement(name = "axis_angle", 
                                                 axis = Vector(obj.rotation_axis_angle[0:2]), 
                                                 angle = obj.rotation_axis_angle[3]))
         
-        sc = StackedScaleElement()
-        sc.scale = Vector(obj.scale)
-        callback.stacked_transforms.append(sc)
+        callback.stacked_transforms.append(StackedScaleElement(scale = Vector(obj.scale)))
 
     return callback
 
@@ -516,7 +505,7 @@ class Export(object):
             if geode.armature_modifier != None:
                 parent.children.remove(item)
                 
-                arm = self.uniq_objects[item.children[0].armature_modifier.object]
+                arm = self.uniq_objects[geode.armature_modifier.object]
                 for (k, v) in self.uniq_objects.items():
                     if v == item:
                         meshobj = k
@@ -528,7 +517,68 @@ class Export(object):
         if hasattr(item, "children"):
             for c in list(item.children):
                 self.reparentRiggedGeodes(c, item)
-        
+                
+    def findBone(self, item, bonename):
+        if isinstance(item, Skeleton) or isinstance(item, Bone):
+            if item.name == bonename:
+                return item
+            for c in list(item.children):
+                n = self.findBone(c, bonename)
+                if n != None:
+                    return n
+        return None
+    
+    def reparentNonDeformedGeodes(self, item, parent):
+        if     isinstance(item, MatrixTransform) \
+                and len(item.children) == 1 \
+                and isinstance(item.children[0], Geode) \
+                and isinstance(parent, Skeleton):
+            geode = item.children[0]
+            osglog.log("optimizing armature influence on geode {}".format(geode.name))
+            if geode.armature_modifier != None:
+                singleBoneInfluence = True
+                target = None
+                for d in geode.drawables:
+                    if isinstance(d, RigGeometry):
+                        infcount = 0
+                        for g in d.groups:
+                            if g in geode.armature_modifier.object.data.bones:
+                                infcount += 1
+                        if infcount != 1:
+                            osglog.log("must have exactly one bone influence, can't optimize")
+                            singleBoneInfluence = False
+                            break
+                        
+                        for name, grp in d.groups.items():
+                            if name in geode.armature_modifier.object.data.bones:
+                                if len(grp.vertexes) != len(d.vertexes.array):
+                                    osglog.log("bone does not influence every vertex, can't optimize")
+                                    singleBoneInfluence = False
+                                    break
+                                for vtx in grp.vertexes:
+                                    if vtx[1] != 1.0:
+                                        osglog.log("vertex has less than 1.0 weight, can't optimize")
+                                        singleBoneInfluence = False
+                                        break
+                                target = name
+                
+                if singleBoneInfluence and target != None:
+                    geode.drawables = [(d.sourcegeometry if isinstance(d, RigGeometry) else d) for d in geode.drawables]
+                    parent.children.remove(item)
+                    blendbone = geode.armature_modifier.object.data.bones[target]
+                    blendbone_matrix = blendbone.matrix_local
+                   
+                    osgbone = self.findBone(parent, target)
+                    for (k, v) in self.uniq_objects.items():
+                        if v == item:
+                            meshobj = k
+                    
+                    item.matrix = getDeltaMatrixFromMatrix(geode.armature_modifier.object.matrix_world * blendbone_matrix, meshobj.matrix_world)
+                    osgbone.children.append(item)
+                    osglog.log("NOTICE: Reparenting {} to {}".format(geode.name, osgbone.name))
+        if hasattr(item, "children"):
+            for c in list(item.children):
+                self.reparentNonDeformedGeodes(c, item)
 
     def postProcess(self):
         # set only one root to the scene
@@ -542,6 +592,7 @@ class Export(object):
             self.root.update_callbacks.append(animation_manager)
             
         self.reparentRiggedGeodes(self.root, None)
+        self.reparentNonDeformedGeodes(self.root, None)
 
         # index light num for opengl use and enable them in a stateset
         if len(self.lights) > 0:
