@@ -269,7 +269,10 @@ def createAnimationsGenericObject(osg_object, blender_object, config, update_cal
     
 def createAnimationsSkeletonObject(osg_object, blender_object, config, uniq_anims):
     osglog.log("animation_data is %s %s" % (blender_object.name, blender_object.animation_data))
-    if (config.export_anim is False) or (blender_object.animation_data == None) or (blender_object.animation_data.action == None):
+    if (config.export_anim is False) \
+        or (blender_object.animation_data == None) \
+        or (blender_object.animation_data.action == None \
+            and len(blender_object.animation_data.nla_tracks) == 0):
         return None
 
     action2animation = BlenderAnimationToAnimation(object = blender_object, config = config, 
@@ -282,7 +285,10 @@ def createAnimationsSkeletonObject(osg_object, blender_object, config, uniq_anim
         osglog.log("animations processed for armature %s bone %s" % (blender_object.name, bname))
 
         if anim != None:
-            anims.append(anim)
+            if isinstance(anim, list):
+                anims = anims + anim
+            else:
+                anims.append(anim)
     
     return anims
 
@@ -1381,98 +1387,102 @@ class BlenderAnimationToAnimation(object):
         # in python and merge your actions as you want. I did it for the game pokme,
         # the osgExporter is able to be used by other scripts
 
-
-        # nla_tracks = []
-        # if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "nla_tracks"):
-        #     nla_tracks = self.object.animation_data.nla_tracks
-        #     if len(nla_tracks) == 0:
-        #         action = self.object.animation_data.action
-
-        # osglog.log("create animation for %s" % self.object.name)
-        # anims = []
-        # if len(nla_tracks) > 0:
-        #     osglog.log("found tracks %d" % (len(nla_tracks)))
-        #     for nla_track in nla_tracks:
-        #         osglog.log("found track %s" % str(nla_track))
-        #         anim = self.createAnimationFromTrack(self.object.name, nla_track)
-        #         anims.append(anim)
-        
         osglog.log("Exporting animation on object " + str(self.object))
         
-        if self.action == None:
-            need_bake = False
-            
-            if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action") and self.object.animation_data.action != None:
-                self.action_name = self.object.animation_data.action.name
-            
-            if hasattr(self.object, "constraints") and (len(self.object.constraints) > 0) and self.config.bake_constraints:
-                osglog.log("Baking constraints " + str(self.object.constraints))
-                need_bake = True
-            else:
-                if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
-                    self.action = self.object.animation_data.action
-                    for fcu in self.action.fcurves:
-                        for kf in fcu.keyframe_points:
-                            if kf.interpolation != 'LINEAR':
-                                need_bake = True
-                                
-            if need_bake:
-                self.action = osgbake.bake(self.config.scene,
-                         self.object,
-                         self.config.scene.frame_start, 
-                         self.config.scene.frame_end,
-                         self.config.bake_frame_step,
-                         False, #only_selected
-                         True,  #do_pose
-                         True,  #do_object
-                         False, #do_constraint_clear
-                         False) #to_quat
+        if target == None:
+            target = self.object.name
 
-        if self.action != None:
-            osglog.log("found action %s, prefix is %s" % (self.action.name, prefix))
-            
-            # Sharing animation channels isn't possible with the osg 2.8 file format reader
-            # so we have to export a separate channel for every object it applies to.
-            # Keeping the following code there for future reference, though.
-            #if self.action in self.uniq_anims:
-            #    return self.uniq_anims[self.action]
-            
-            if target == None:
-                target = self.object.name
-            
-            anim = self.createAnimationFromAction(target, self.action_name, self.action, prefix)
+        nla_tracks = []
+        if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "nla_tracks"):
+            nla_tracks = self.object.animation_data.nla_tracks
+            if len(nla_tracks) == 0:
+                action = self.object.animation_data.action
 
-            osglog.log("uniq_anims ".format(self.uniq_anims))
-            
-            if self.action in self.uniq_anims:
-                add_to_anim = self.uniq_anims[self.action]
-                add_to_anim.channels = add_to_anim.channels + anim.channels
-                return add_to_anim
-            else:
-                self.uniq_anims[self.action] = anim
-                return anim
+        osglog.log("create animation for %s" % self.object.name)
+        anims = []
+        if len(nla_tracks) > 0:
+            osglog.log("found tracks %d" % (len(nla_tracks)))
+            for nla_track in nla_tracks:
+                osglog.log("found track %s" % str(nla_track))
+                anim = self.createAnimationFromTrack(target, nla_track.name, nla_track, prefix)
+                if anim != None:
+                    anims.append(anim)
+            return anims
         else:
-            return None
+            if self.action == None:
+                need_bake = False
+                
+                if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action") and self.object.animation_data.action != None:
+                    self.action_name = self.object.animation_data.action.name
+                
+                if hasattr(self.object, "constraints") and (len(self.object.constraints) > 0) and self.config.bake_constraints:
+                    osglog.log("Baking constraints " + str(self.object.constraints))
+                    need_bake = True
+                else:
+                    if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
+                        self.action = self.object.animation_data.action
+                        for fcu in self.action.fcurves:
+                            for kf in fcu.keyframe_points:
+                                if kf.interpolation != 'LINEAR':
+                                    need_bake = True
+                                    
+                if need_bake:
+                    self.action = osgbake.bake(self.config.scene,
+                             self.object,
+                             self.config.scene.frame_start, 
+                             self.config.scene.frame_end,
+                             self.config.bake_frame_step,
+                             False, #only_selected
+                             True,  #do_pose
+                             True,  #do_object
+                             False, #do_constraint_clear
+                             False) #to_quat
 
-    #def createAnimationFromTrack(self, name, track):
-    #    animation = Animation()
-    #    animation.setName(name)
-    #
-    #    actions = []
-    #    if track:
-    #        for strip in track.strips:
-    #            actions.append(strip.action)
-    #
-    #    self.convertActionsToAnimation(animation, actions)
-    #    self.animation = animation
-    #    return animation
+            if self.action != None:
+                osglog.log("found action %s, prefix is %s" % (self.action.name, prefix))
+                
+                # Sharing animation channels isn't possible with the osg 2.8 file format reader
+                # so we have to export a separate channel for every object it applies to.
+                # Keeping the following code there for future reference, though.
+                #if self.action in self.uniq_anims:
+                #    return self.uniq_anims[self.action]
+                
+                anim = self.createAnimationFromAction(target, self.action_name, self.action, prefix)
+
+                osglog.log("uniq_anims ".format(self.uniq_anims))
+                
+                if self.action in self.uniq_anims:
+                    add_to_anim = self.uniq_anims[self.action]
+                    add_to_anim.channels = add_to_anim.channels + anim.channels
+                    return add_to_anim
+                else:
+                    self.uniq_anims[self.action] = anim
+                    return anim
+            else:
+                return None
+
+    def createAnimationFromTrack(self, target, name, track, prefix):
+        animation = Animation()
+        animation.setName(name)
+    
+        if track:
+            for strip in track.strips:
+                self.convertActionsToAnimation(target, animation, strip.action, prefix)
+        if len(animation.channels) == 0:
+            return None
+        else:
+            self.animation = animation
+            return animation
 
     def createAnimationFromAction(self, target, name, action, prefix):
         animation = Animation()
         animation.setName(name)
         self.convertActionsToAnimation(target, animation, action, prefix)
-        self.animation = animation
-        return animation
+        if len(animation.channels) == 0:
+            return None
+        else:
+            self.animation = animation
+            return animation
 
     def convertActionsToAnimation(self, target, anim, action, prefix):
         channels = exportActionsToKeyframeSplitRotationTranslationScale(target, action, self.config.anim_fps, prefix)
@@ -1529,6 +1539,12 @@ def getChannel(target, action, fps, data_path, array_indexes):
             value.append(fcurve.evaluate(time))
         channel.keys.append(value)
     
+    # osg needs to have at least two keyframes
+    if len(channel.keys) == 1:
+        c = list(channel.keys[0])
+        c[0] = c[0] + .01
+        channel.keys.append(c)
+    
     return channel
 
 # as for blender 2.49
@@ -1542,7 +1558,7 @@ def exportActionsToKeyframeSplitRotationTranslationScale(target, action, fps, pr
 
     euler = []
     eulerName = [ "euler_x", "euler_y", "euler_z"]
-    for i in range(0,3):
+    for i in [0, 1, 2]:
         c = getChannel(target, action, fps, prefix+"rotation_euler", [i])
         if c:
             c.setName(eulerName[i])
