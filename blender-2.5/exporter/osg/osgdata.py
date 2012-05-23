@@ -188,9 +188,15 @@ def createAnimationUpdate(obj, callback, rotation_mode, prefix="", zero=False):
     has_rotation_keys = False
         
     if obj.animation_data:
-        action = obj.animation_data.action
+        actions = []
+        if obj.animation_data.action:
+            actions = [obj.animation_data.action]
+        elif len(obj.animation_data.nla_tracks) > 0:
+            for track in obj.animation_data.nla_tracks:
+                for strip in track.strips:
+                    actions.append(strip.action)
         
-        if action:
+        for action in actions:
             for curve in action.fcurves:
                 datapath = curve.data_path[len(prefix):]
                 osglog.log("curve.data_path " + curve.data_path + " " + str(curve.array_index) + " " + datapath)
@@ -255,6 +261,7 @@ def createAnimationUpdate(obj, callback, rotation_mode, prefix="", zero=False):
     return callback
 
 def createAnimationsGenericObject(osg_object, blender_object, config, update_callback, uniq_anims):
+    osglog.log("animation_data is {} {} {} {}".format(blender_object.name, blender_object.animation_data, config.export_anim, update_callback))
     if (config.export_anim is False) or (update_callback is None):
         return None
 
@@ -263,9 +270,10 @@ def createAnimationsGenericObject(osg_object, blender_object, config, update_cal
     anim = action2animation.createAnimation()
     osglog.log("animations created for object '%s'" % (blender_object.name))
     if anim != None:
-        osglog.log("processed animation '%s'" % anim.name)
+        if not isinstance(anim, list):
+            anim = [anim]
         osg_object.update_callbacks.append(update_callback)
-    return [anim]
+    return anim
     
 def createAnimationsSkeletonObject(osg_object, blender_object, config, uniq_anims):
     osglog.log("animation_data is %s %s" % (blender_object.name, blender_object.animation_data))
@@ -322,6 +330,9 @@ class Export(object):
     def isValidToExport(self, object):
         if object.name in self.config.exclude_objects:
             return False
+        
+        if object.type == 'ARMATURE':
+            return True
         
         if self.config.only_visible:
             if object.is_visible(self.config.scene):
