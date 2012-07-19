@@ -260,6 +260,8 @@ class OSGGUI(bpy.types.Operator, ExportHelper):
         except Exception:
             pass
         
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
         if self.config.export_all_scenes:
             for scene in bpy.data.scenes:
                 self.config.scene = scene

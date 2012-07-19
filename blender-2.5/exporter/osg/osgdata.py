@@ -348,9 +348,7 @@ class Export(object):
             if object.is_visible(self.config.scene):
                 return True
         else:
-            return True
-
-        return False
+            return not object.hide_render
         
     def setArmatureInRestMode(self):
         for arm in bpy.data.objects:
