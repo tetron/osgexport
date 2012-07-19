@@ -189,9 +189,15 @@ def createAnimationUpdate(obj, callback, rotation_mode, prefix="", zero=False):
     has_rotation_keys = False
         
     if obj.animation_data:
-        action = obj.animation_data.action
+        actions = []
+        if obj.animation_data.action:
+            actions = [obj.animation_data.action]
+        elif len(obj.animation_data.nla_tracks) > 0:
+            for track in obj.animation_data.nla_tracks:
+                for strip in track.strips:
+                    actions.append(strip.action)
         
-        if action:
+        for action in actions:
             for curve in action.fcurves:
                 datapath = curve.data_path[len(prefix):]
                 osglog.log("curve.data_path " + curve.data_path + " " + str(curve.array_index) + " " + datapath)
@@ -255,6 +261,7 @@ def createAnimationUpdate(obj, callback, rotation_mode, prefix="", zero=False):
     return callback
 
 def createAnimationsGenericObject(osg_object, blender_object, config, update_callback, unique_objects):
+    osglog.log("animation_data is {} {} {} {}".format(blender_object.name, blender_object.animation_data, config.export_anim, update_callback))
     if (config.export_anim is False) or (update_callback is None) or (blender_object.animation_data is None):
         return None
 
@@ -344,6 +351,9 @@ class Export(object):
         if object.name in self.config.exclude_objects:
             return False
         
+        if object.type == 'ARMATURE':
+            return True
+        
         if self.config.only_visible:
             if object.is_visible(self.config.scene):
                 return True
@@ -392,12 +402,15 @@ class Export(object):
         return "no name"
 
     def createAnimationsSkeletonObject(self, osg_object, blender_object):
-
-        if (self.config.export_anim is False) or (blender_object.animation_data == None) or (blender_object.animation_data.action == None):
+        
+        if (config.export_anim is False) \
+            or (blender_object.animation_data == None) \
+            or (blender_object.animation_data.action == None \
+                and len(blender_object.animation_data.nla_tracks) == 0):
             return None
 
-        if self.unique_objects.hasAnimation(blender_object.animation_data.action):
-            return None
+        #if self.unique_objects.hasAnimation(blender_object.animation_data.action):
+        #    return None
 
         osglog.log("animation_data is %s %s" % (blender_object.name, blender_object.animation_data))
 
@@ -1598,24 +1611,20 @@ class BlenderAnimationToAnimation(object):
         self.object = kwargs.get("object", None)
         self.unique_objects = kwargs.get("unique_objects", {})
         self.animations = None
-        self.action = None
-        self.action_name = None
 
-    def handleAnimationBaking(self):
+    def handleAnimationBaking(self, action):
         need_bake = False
         if hasattr(self.object, "constraints") and (len(self.object.constraints) > 0) and self.config.bake_constraints:
             osglog.log("Baking constraints " + str(self.object.constraints))
             need_bake = True
         else:
-            if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
-                self.action = self.object.animation_data.action
-                for fcu in self.action.fcurves:
-                    for kf in fcu.keyframe_points:
-                        if kf.interpolation != 'LINEAR':
-                            need_bake = True
+            for fcu in action.fcurves:
+                for kf in fcu.keyframe_points:
+                    if kf.interpolation != 'LINEAR':
+                        need_bake = True
 
         if need_bake:
-            self.action = osgbake.bake(self.config.scene,
+            action = osgbake.bake(self.config.scene,
                      self.object,
                      self.config.scene.frame_start, 
                      self.config.scene.frame_end,
@@ -1625,26 +1634,58 @@ class BlenderAnimationToAnimation(object):
                      True,  #do_object
                      False, #do_constraint_clear
                      False) #to_quat
-
+        
+        return action
 
     def createAnimation(self, target = None):
-
         osglog.log("Exporting animation on object " + str(self.object))
-        if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action") and self.object.animation_data.action != None:
-            self.action_name = self.object.animation_data.action.name
-
-        self.handleAnimationBaking()
-
+        
         if target == None:
             target = self.object.name
+        
+        nla_tracks = []
+        if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "nla_tracks"):
+            nla_tracks = self.object.animation_data.nla_tracks
+            
+        if nla_tracks != None and len(nla_tracks) > 0:
+            osglog.log("found %d tracks" % (len(nla_tracks)))
+            anims = []
+            for nla_track in nla_tracks:
+                osglog.log("found track %s" % str(nla_track))
+                nla_tracks.active = nla_track
+                anim = self.createAnimationFromTrack(target, nla_track.name, nla_track)
+                if anim != None:
+                    anims.append(anim)
+            return anims
+        else:
+            if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
+                action = self.object.animation_data.action
+                action_name = self.object.animation_data.action.name
+            if action != None:
+                bakedaction = self.handleAnimationBaking(action)
+                anim = self.createAnimationFromAction(target, action_name, bakedaction)
+                if anim != None:
+                    self.unique_objects.registerAnimation(action, anim)
+                    return [anim]       
+        return []
 
-        anim = self.createAnimationFromAction(target, self.action_name, self.action)
-        self.unique_objects.registerAnimation(self.action, anim)
-        return [anim]
-
-    def createAnimationFromAction(self, target, name, action):
+    def createAnimationFromTrack(self, target, name, track):
         animation = Animation()
         animation.setName(name)
+        if track:
+            for strip in track.strips:
+                action = self.handleAnimationBaking(strip.action)
+                self.createAnimationFromAction(target, name, action, animation)
+        
+        if len(animation.channels) == 0:
+            return None
+        else:
+            return animation
+            
+    def createAnimationFromAction(self, target, name, action, animation=None):
+        if animation == None:
+            animation = Animation()
+            animation.setName(name)
         if self.object.type == "ARMATURE":
             for bone in self.object.data.bones:
                 bname = bone.name
@@ -1652,7 +1693,11 @@ class BlenderAnimationToAnimation(object):
                 self.appendChannelsToAnimation(bname, animation, action, prefix=('pose.bones["%s"].' % (bname)))
         else:
             self.appendChannelsToAnimation(target, animation, action)
-        return animation
+        
+        if len(animation.channels) == 0:
+            return None
+        else:
+            return animation
 
     def appendChannelsToAnimation(self, target, anim, action, prefix = ""):
         channels = exportActionsToKeyframeSplitRotationTranslationScale(target, action, self.config.anim_fps, prefix)
@@ -1709,6 +1754,12 @@ def getChannel(target, action, fps, data_path, array_indexes):
             value.append(fcurve.evaluate(time))
         channel.keys.append(value)
     
+    # osg needs to have at least two keyframes
+    if len(channel.keys) == 1:
+        c = list(channel.keys[0])
+        c[0] = c[0] + .01
+        channel.keys.append(c)
+    
     return channel
 
 # as for blender 2.49
@@ -1722,7 +1773,7 @@ def exportActionsToKeyframeSplitRotationTranslationScale(target, action, fps, pr
 
     euler = []
     eulerName = [ "euler_x", "euler_y", "euler_z"]
-    for i in range(0,3):
+    for i in [0, 1, 2]:
         c = getChannel(target, action, fps, prefix+"rotation_euler", [i])
         if c:
             c.setName(eulerName[i])
