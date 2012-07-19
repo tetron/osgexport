@@ -56,6 +56,7 @@ class Config(object):
         self.defaultattr("only_visible", True)
         self.defaultattr("export_anim", True)
         self.defaultattr("object_selected", None)
+        self.defaultattr("optimize_influence", False)
 
         self.defaultattr("zero_translations", False)
         self.defaultattr("apply_modifiers", False)

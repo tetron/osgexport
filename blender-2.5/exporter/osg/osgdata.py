@@ -646,7 +646,8 @@ class Export(object):
             self.root.update_callbacks.append(animation_manager)
             
         self.reparentRiggedGeodes(self.root, None)
-        self.reparentNonDeformedGeodes(self.root, None)
+        if self.config.optimize_influence:
+            self.reparentNonDeformedGeodes(self.root, None)
         
         # index light num for opengl use and enable them in a stateset
         if len(self.lights) > 0:

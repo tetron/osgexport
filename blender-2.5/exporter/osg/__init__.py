@@ -154,6 +154,7 @@ class OSGGUI(bpy.types.Operator, ExportHelper):
     TEXTURE_PREFIX = StringProperty(name="texture prefix", default="")
     EXPORT_ALL_SCENES = BoolProperty(name="Export all scenes", default=False)
     ZERO_TRANSLATIONS = BoolProperty(name="Zero world translations", default=False)
+    OPTIMIZE_INFLUENCE = BoolProperty(name="Optimize bone influences", default=False)
    
     def draw(self, context):
         layout = self.layout
@@ -168,6 +169,7 @@ class OSGGUI(bpy.types.Operator, ExportHelper):
         layout.row(align=True).prop(self, "BAKE_CONSTRAINTS")
         layout.row(align=True).prop(self, "LOG")
         layout.row(align=True).prop(self, "ZERO_TRANSLATIONS")
+        layout.row(align=True).prop(self, "OPTIMIZE_INFLUENCE")
         layout.row(align=True).prop(self, "ANIMFPS")
         layout.row(align=True).prop(self, "BAKE_FRAME_STEP")
         layout.row(align=True).prop(self, "FLOATPRE")
@@ -197,6 +199,7 @@ class OSGGUI(bpy.types.Operator, ExportHelper):
             
         self.SELECTED = (self.config.selected == "SELECTED_ONLY_WITH_CHILDREN")
         self.ONLY_VISIBLE = self.config.only_visible
+        self.OPTIMIZE_INFLUENCE = self.config.optimize_influence
         self.INDENT = self.config.indent
         self.FLOATPRE = self.config.float_precision
         self.ANIMFPS = context.scene.render.fps
@@ -252,6 +255,7 @@ class OSGGUI(bpy.types.Operator, ExportHelper):
         self.config.osgconv_embed_textures = self.OSGCONV_EMBED_TEXTURES
         self.config.export_all_scenes = self.EXPORT_ALL_SCENES
         self.config.osgconv_cleanup = self.OSGCONV_CLEANUP
+        self.config.optimize_influence = self.OPTIMIZE_INFLUENCE
         
         try:
             cfg = os.path.join(bpy.utils.user_resource('CONFIG'), "osgExport.cfg")
