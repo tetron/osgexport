@@ -585,7 +585,7 @@ class Export(object):
             for c in list(item.children):
                 self.reparentRiggedGeodes(c, item)
 
-                    def findBone(self, item, bonename):
+    def findBone(self, item, bonename):
         if isinstance(item, Skeleton) or isinstance(item, Bone):
             if item.name == bonename:
                 return item
