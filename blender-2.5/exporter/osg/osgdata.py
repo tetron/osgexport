@@ -149,40 +149,6 @@ def findArmatureObjectForTrack(track):
                 return 0
     return None
 
-#def findObjectForIpo(ipo):
-#    index = ipo.name.rfind('-')
-#    if index != -1:
-#        objname = ipo.name[index+1:]
-#        try:
-#            obj = self.config.scene.objects[objname]
-#            log("bake ipo %s to object %s" % (ipo.name, objname))
-#            return obj
-#        except:
-#            return None
-#
-#    for o in self.config.scene.objects:
-#        if o.getIpo() == ipo:
-#            log("bake ipo %s to object %s" % (ipo.name, o.name))
-#            return o
-#    return None
-#
-#def findMaterialForIpo(ipo):
-#    index = ipo.name.rfind('-')
-#    if index != -1:
-#        objname = ipo.name[index+1:]
-#        try:
-#            obj = bpy.data.materials[objname]
-#            log("bake ipo %s to material %s" % (ipo.name, objname))
-#            return obj
-#        except:
-#            return None
-#
-#    for o in bpy.data.materials:
-#        if o.getIpo() == ipo:
-#            log("bake ipo %s to material %s" % (ipo.name, o.name))
-#            return o
-#    return None
-
 def createAnimationUpdate(obj, callback, rotation_mode, prefix="", zero=False):
     has_location_keys = False
     has_scale_keys = False
@@ -403,7 +369,7 @@ class Export(object):
 
     def createAnimationsSkeletonObject(self, osg_object, blender_object):
         
-        if (config.export_anim is False) \
+        if (self.config.export_anim is False) \
             or (blender_object.animation_data == None) \
             or (blender_object.animation_data.action == None \
                 and len(blender_object.animation_data.nla_tracks) == 0):
@@ -618,7 +584,7 @@ class Export(object):
                         
                         for name, grp in d.groups.items():
                             if name in geode.armature_modifier.object.data.bones:
-                                if len(grp.vertexes) != len(d.vertexes.array):
+                                if len(grp.vertexes) != len(d.vertexes.array.array):
                                     osglog.log("bone does not influence every vertex, can't optimize")
                                     singleBoneInfluence = False
                                     break
@@ -636,7 +602,7 @@ class Export(object):
                     blendbone_matrix = blendbone.matrix_local
                    
                     osgbone = self.findBone(parent, target)
-                    for (k, v) in self.uniq_objects.items():
+                    for (k, v) in self.unique_objects.objects.items():
                         if v == item:
                             meshobj = k
                     
@@ -1626,8 +1592,8 @@ class BlenderAnimationToAnimation(object):
         if need_bake:
             action = osgbake.bake(self.config.scene,
                      self.object,
-                     self.config.scene.frame_start, 
-                     self.config.scene.frame_end,
+                     action.frame_range[0], 
+                     action.frame_range[1],
                      self.config.bake_frame_step,
                      False, #only_selected
                      True,  #do_pose
@@ -1650,12 +1616,14 @@ class BlenderAnimationToAnimation(object):
         if nla_tracks != None and len(nla_tracks) > 0:
             osglog.log("found %d tracks" % (len(nla_tracks)))
             anims = []
+            
             for nla_track in nla_tracks:
                 osglog.log("found track %s" % str(nla_track))
-                nla_tracks.active = nla_track
+                nla_track.is_solo = True
                 anim = self.createAnimationFromTrack(target, nla_track.name, nla_track)
                 if anim != None:
                     anims.append(anim)
+            
             return anims
         else:
             if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
