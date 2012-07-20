@@ -1578,9 +1578,12 @@ class BlenderAnimationToAnimation(object):
         self.unique_objects = kwargs.get("unique_objects", {})
         self.animations = None
 
+    def hasConstraints(self):
+        return (hasattr(self.object, "constraints") and (len(self.object.constraints) > 0) and self.config.bake_constraints)
+        
     def handleAnimationBaking(self, action):
         need_bake = False
-        if hasattr(self.object, "constraints") and (len(self.object.constraints) > 0) and self.config.bake_constraints:
+        if self.hasConstraints():
             osglog.log("Baking constraints " + str(self.object.constraints))
             need_bake = True
         else:
@@ -1603,39 +1606,73 @@ class BlenderAnimationToAnimation(object):
         
         return action
 
-    def createAnimation(self, target = None):
-        osglog.log("Exporting animation on object " + str(self.object))
-        
-        if target == None:
-            target = self.object.name
-        
+    def createAnimationsFromNLAtracks(self, target):
         nla_tracks = []
         if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "nla_tracks"):
             nla_tracks = self.object.animation_data.nla_tracks
-            
+        
+        anims = []
         if nla_tracks != None and len(nla_tracks) > 0:
             osglog.log("found %d tracks" % (len(nla_tracks)))
-            anims = []
-            
             for nla_track in nla_tracks:
                 osglog.log("found track %s" % str(nla_track))
                 nla_track.is_solo = True
                 anim = self.createAnimationFromTrack(target, nla_track.name, nla_track)
                 if anim != None:
                     anims.append(anim)
-            
-            return anims
-        else:
-            if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
-                action = self.object.animation_data.action
-                action_name = self.object.animation_data.action.name
-            if action != None:
-                bakedaction = self.handleAnimationBaking(action)
-                anim = self.createAnimationFromAction(target, action_name, bakedaction)
-                if anim != None:
-                    self.unique_objects.registerAnimation(action, anim)
-                    return [anim]       
-        return []
+        return anims
+        
+    def createAnimationsFromObjectAction(self, target):
+        anims = []
+        action = None
+        if hasattr(self.object, "animation_data") and hasattr(self.object.animation_data, "action"):
+            action = self.object.animation_data.action
+        if action != None:
+            bakedaction = self.handleAnimationBaking(action)
+            anim = self.createAnimationFromAction(target, action.name, bakedaction)
+            if anim != None:
+                self.unique_objects.registerAnimation(action, anim)
+                anims.append(anim)
+        return anims
+        
+    def createAnimationFromConstraintTarget(self, target):
+        anims = []
+        if self.hasConstraints():
+            for c in self.object.constraints:
+                if hasattr(c, "target"):
+                    if hasattr(c.target, "animation_data"):
+                        if hasattr(c.target.animation_data, "nla_tracks"):
+                            nla_tracks = c.target.animation_data.nla_tracks
+                            if nla_tracks != None and len(nla_tracks) > 0:
+                                osglog.log("found %d tracks" % (len(nla_tracks)))
+                                for nla_track in nla_tracks:
+                                    osglog.log("found track %s" % str(nla_track))
+                                    nla_track.is_solo = True
+                                    anim = self.createAnimationFromTrack(target, nla_track.name, nla_track)
+                                    if anim != None:
+                                        anims.append(anim)
+                        if hasattr(c.target.animation_data, "action"):
+                            if c.target.animation_data.action != None:
+                                bakedaction = self.handleAnimationBaking(c.target.animation_data.action)
+                                anim = self.createAnimationFromAction(target, c.target.animation_data.action.name, bakedaction)
+                                if anim != None:
+                                    anims.append(anim)
+        return anims
+                            
+                                    
+        
+    def createAnimation(self, target = None):
+        osglog.log("Exporting animation on object " + str(self.object))
+        
+        if target == None:
+            target = self.object.name
+
+        anims = []
+        anims += self.createAnimationsFromNLAtracks(target)
+        anims += self.createAnimationsFromObjectAction(target)
+        anims += self.createAnimationFromConstraintTarget(target)
+        
+        return anims
 
     def createAnimationFromTrack(self, target, name, track):
         animation = Animation()
