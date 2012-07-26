@@ -62,11 +62,12 @@ class Config(object):
         self.defaultattr("apply_modifiers", False)
         self.defaultattr("bake_constraints", True)
         self.defaultattr("bake_frame_step", 1)
-        self.defaultattr("osgconv_to_ive", False)
+        self.defaultattr("run_osgconv", False)
         osgconv_util = "osgconv"
         if sys.platform == 'win32':
             osgconv_util += ".exe"
         self.defaultattr("osgconv_path", osgconv_util)
+        self.defaultattr("osgconv_ext", "osgb")
         self.defaultattr("osgconv_embed_textures", False)
         self.defaultattr("run_viewer", False)
         osgviewer_util = "osgviewer"

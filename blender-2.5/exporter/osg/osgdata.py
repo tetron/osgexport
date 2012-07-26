@@ -724,22 +724,25 @@ class Export(object):
                 except Exception  as e:
                     osglog.log("error while trying to copy file {} to {}: {}".format(imagename, nativePath, str(e)))
 
-        filetoview = self.config.getFullName("osgt")
-        if self.config.osgconv_to_ive:
+        filetoview = filename
+        
+        if self.config.run_osgconv:
+            convertedFile = self.config.getFullName(self.config.osgconv_ext)
             if self.config.osgconv_embed_textures:
-                r = [self.config.osgconv_path, "-O", "includeImageFileInIVEFile", self.config.getFullName("osgt"), self.config.getFullName("ive")]
+                r = [self.config.osgconv_path, "-O", "includeImageFileInIVEFile", filename, convertedFile]
             else:
-                r = [self.config.osgconv_path, "-O", "noTexturesInIVEFile", self.config.getFullName("osgt"), self.config.getFullName("ive")]
+                r = [self.config.osgconv_path, "-O", "noTexturesInIVEFile", filename, convertedFile]
             try:
+                osglog.log("Executing osgconv: " + str(r))
                 if subprocess.call(r) == 0:
-                    filetoview = self.config.getFullName("ive")
                     if self.config.osgconv_cleanup:
-                        os.unlink(self.config.getFullName("osgt"))
+                        os.unlink(filename)
                         if self.config.osgconv_embed_textures:
                             for i in copied_images:
                                 os.unlink(i)
+                filetoview = convertedFile
             except Exception as e:
-                print("Error running " + str(r))
+                print("Error running osgconv")
                 print(repr(e))
             
         if self.config.run_viewer:
