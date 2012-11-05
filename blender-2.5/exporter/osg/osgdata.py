@@ -326,9 +326,9 @@ class Export(object):
             return True
         
         if self.config.only_visible:
-            if object.is_visible(self.config.scene):
-                return True
+            return object.is_visible(self.config.scene)
         else:
+            osglog.log("object {} hide_render {}".format(object.name, object.hide_render))
             return not object.hide_render
         
     def setArmatureInRestMode(self):
@@ -786,7 +786,7 @@ class Export(object):
          
         osglog.log("mesh_object is " + mesh_object.name)
         
-        if self.unique_objects.hasObject(mesh_object):
+        if armature_modifier == None and self.unique_objects.hasObject(mesh_object):
             return self.unique_objects.getObject(mesh_object)
 
         hasVertexGroup = False
@@ -807,7 +807,7 @@ class Export(object):
             for geom in sources_geometries:
                 rig_geom = RigGeometry()
                 rig_geom.sourcegeometry = geom
-                rig_geom.copyFrom(geom)
+                #rig_geom.copyFrom(geom)
                 rig_geom.groups = geom.groups
                 geometries.append(rig_geom)
         else:
@@ -1748,9 +1748,10 @@ def getChannel(target, action, fps, data_path, array_indexes):
     
     times.sort()
     
+    #osglog.log("fcurves array_indexes is {}".format(array_indexes))
+    
     for time in times:
         realtime = (time) / fps
-        #osglog.log("time {} {} {}".format(time, realtime, fps))
 
         # realtime = time
         if realtime > duration:
@@ -1758,7 +1759,9 @@ def getChannel(target, action, fps, data_path, array_indexes):
 
         value = [realtime]
         for fcurve in fcurves:
-            value.append(fcurve.evaluate(time))
+            v = fcurve.evaluate(time)
+            #osglog.log("time {} {} {}".format(fcurve.data_path, time, v))
+            value.append(v)
         channel.keys.append(value)
     
     # osg needs to have at least two keyframes
